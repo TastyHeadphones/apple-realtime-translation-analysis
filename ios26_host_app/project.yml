@@ -1,0 +1,26 @@
+name: RealtimeInterpretationHost
+options:
+  minimumXcodeGenVersion: 2.43.0
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+packages:
+  RealtimeInterpretationDemo:
+    path: ../ios26_demo
+targets:
+  RealtimeInterpretationHost:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.4"
+    sources:
+      - path: App
+    info:
+      path: App/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tastyheadphones.RealtimeInterpretationHost
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - package: RealtimeInterpretationDemo
+        product: RealtimeInterpretationDemo

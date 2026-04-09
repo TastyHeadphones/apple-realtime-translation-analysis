@@ -5,6 +5,7 @@
 - iOS deployment target 26.4
 - Microphone permission
 - Installed translation/speech assets for selected language pair on device
+- `xcodegen` (for regenerating the host app project)
 
 ## Build Check (already verified)
 ```bash
@@ -12,29 +13,27 @@ cd ios26_demo
 xcodebuild -scheme RealtimeInterpretationDemo -destination 'generic/platform=iOS Simulator' build
 ```
 
-## Use in an iOS App
-This repo provides a Swift package library target, not a standalone app target.
+## Open and Run the Host App
+This repo now includes a runnable iOS app project at `ios26_host_app/`.
 
-1. Open your iOS app project in Xcode.
-2. Add local package dependency:
-- Path: `ios26_demo` (from this repository root)
-3. Import and embed the view:
-```swift
-import SwiftUI
-import RealtimeInterpretationDemo
+```bash
+cd ios26_host_app
+xcodegen generate
+open RealtimeInterpretationHost.xcodeproj
+```
 
-@main
-struct DemoHostApp: App {
-    var body: some Scene {
-        WindowGroup {
-            if #available(iOS 26.4, *) {
-                RealtimeInterpreterView()
-            } else {
-                Text("Requires iOS 26.4+")
-            }
-        }
-    }
-}
+Xcode scheme: `RealtimeInterpretationHost`
+
+## CLI Build for Host App
+```bash
+cd ios26_host_app
+xcodegen generate
+xcodebuild -project RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
+```
+
+## Build Without Xcode UI (direct from repo root)
+```bash
+xcodebuild -project ios26_host_app/RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
 ```
 
 ## Runtime Notes

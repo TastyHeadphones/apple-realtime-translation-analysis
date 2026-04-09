@@ -10,6 +10,7 @@ Research and demo implementation for Apple-like live translation behavior using 
 - `TODO.md`
 - `RUN.md`
 - `ios26_demo/` (Swift package demo source)
+- `ios26_host_app/` (runnable iOS host app project)
 
 ## Demo Tech Stack
 - `Translation` framework (`TranslationSession`, `preferredStrategy`)
@@ -22,4 +23,8 @@ Research and demo implementation for Apple-like live translation behavior using 
 ```bash
 cd ios26_demo
 xcodebuild -scheme RealtimeInterpretationDemo -destination 'generic/platform=iOS Simulator' build
+
+cd ../ios26_host_app
+xcodegen generate
+xcodebuild -project RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
 ```
