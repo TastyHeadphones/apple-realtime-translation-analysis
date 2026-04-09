@@ -10,41 +10,73 @@ public struct RealtimeInterpreterView: View {
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    configurationSection
-                    liveSection
-                    partnerInputSection
-                    finalSections
-                    diagnosticsSection
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.07, green: 0.11, blue: 0.20),
+                        Color(red: 0.05, green: 0.24, blue: 0.30),
+                        Color(red: 0.09, green: 0.13, blue: 0.16)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 14) {
+                        headerSection
+                        configurationSection
+                        liveSection
+                        partnerInputSection
+                        finalSections
+                        diagnosticsSection
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 110)
                 }
-                .padding(16)
             }
             .navigationTitle("Live Translation")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if viewModel.isRunning {
-                        Button("Stop") {
-                            viewModel.stop()
-                        }
-                        .tint(.red)
-                    } else {
-                        Button("Start") {
-                            viewModel.start()
-                        }
-                    }
-                }
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                controlSection
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
             }
         }
     }
 
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Interpreter")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Text(viewModel.isDualRouteActive ? "Dual Route" : "Single Route")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(viewModel.isDualRouteActive ? Color.green : Color.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.14), in: Capsule())
+            }
+
+            Text("AirPods lane for you, iPhone lane for partner speech.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(14)
+        .cardBackground(cornerRadius: 20, tint: .white.opacity(0.12))
+    }
+
     private var configurationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Conversation Setup")
-                .font(.headline)
+            sectionHeader("Conversation Setup", symbol: "gearshape.2")
 
-            HStack {
-                TextField("Your language locale (e.g. en-US)", text: $viewModel.config.sourceLocaleIdentifier)
+            HStack(spacing: 8) {
+                TextField("Your locale (en-US)", text: $viewModel.config.sourceLocaleIdentifier)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textFieldStyle(.roundedBorder)
@@ -52,7 +84,7 @@ public struct RealtimeInterpreterView: View {
                 Image(systemName: "arrow.left.and.right")
                     .foregroundStyle(.secondary)
 
-                TextField("Partner language locale (e.g. es-ES)", text: $viewModel.config.targetLocaleIdentifier)
+                TextField("Partner locale (es-ES)", text: $viewModel.config.targetLocaleIdentifier)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textFieldStyle(.roundedBorder)
@@ -65,8 +97,11 @@ public struct RealtimeInterpreterView: View {
             .pickerStyle(.segmented)
 
             HStack {
-                Text("Partial throttle: \(viewModel.config.partialTranslationThrottleMs) ms")
+                Text("Partial update throttle")
+                    .foregroundStyle(.secondary)
                 Spacer()
+                Text("\(viewModel.config.partialTranslationThrottleMs) ms")
+                    .font(.subheadline.monospacedDigit())
             }
 
             Slider(
@@ -80,80 +115,91 @@ public struct RealtimeInterpreterView: View {
 
             Toggle("Speak translated output", isOn: $viewModel.config.speakTranslatedOutput)
         }
-        .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
         .disabled(viewModel.isRunning)
     }
 
     private var liveSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("You → Partner (Live Microphone)")
-                .font(.headline)
+            sectionHeader("You → Partner (Live Mic)", symbol: "waveform")
 
             laneCard(
-                title: "Your partial speech",
+                title: "Partial Speech",
                 text: viewModel.sourcePartialText,
-                color: .blue.opacity(0.15)
+                tint: Color.blue.opacity(0.15)
             )
 
             laneCard(
-                title: "Partner partial translation",
+                title: "Partial Translation",
                 text: viewModel.targetPartialText,
-                color: .green.opacity(0.15)
+                tint: Color.green.opacity(0.16)
             )
         }
-        .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
     }
 
     private var partnerInputSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Partner → You (Simulated Input)")
-                .font(.headline)
+            sectionHeader("Partner → You (Text Sim)", symbol: "earbuds")
 
-            HStack(spacing: 8) {
-                TextField("Type partner speech in partner language", text: $viewModel.partnerInputText)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!viewModel.isRunning)
-
-                Button("Translate") {
-                    viewModel.submitPartnerText()
-                }
-                .buttonStyle(.borderedProminent)
+            TextField("Type partner speech in partner language", text: $viewModel.partnerInputText)
+                .textFieldStyle(.roundedBorder)
                 .disabled(!viewModel.isRunning)
+
+            Button {
+                viewModel.submitPartnerText()
+            } label: {
+                Label("Translate To You", systemImage: "arrow.down.left.circle.fill")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(!viewModel.isRunning)
         }
-        .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
     }
 
     private var finalSections: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Final Segments")
-                .font(.headline)
+            sectionHeader("Final Segments", symbol: "text.quote")
 
-            Text("To Partner (iPhone playback target)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            segmentList(viewModel.toPartnerSegments)
+            ViewThatFits {
+                HStack(alignment: .top, spacing: 10) {
+                    segmentColumn(
+                        title: "To Partner (Phone)",
+                        segments: viewModel.toPartnerSegments,
+                        tint: Color.blue.opacity(0.10)
+                    )
+                    segmentColumn(
+                        title: "To You (Earphones)",
+                        segments: viewModel.toMeSegments,
+                        tint: Color.green.opacity(0.12)
+                    )
+                }
 
-            Text("To You (Earphones playback target)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            segmentList(viewModel.toMeSegments)
+                VStack(spacing: 10) {
+                    segmentColumn(
+                        title: "To Partner (Phone)",
+                        segments: viewModel.toPartnerSegments,
+                        tint: Color.blue.opacity(0.10)
+                    )
+                    segmentColumn(
+                        title: "To You (Earphones)",
+                        segments: viewModel.toMeSegments,
+                        tint: Color.green.opacity(0.12)
+                    )
+                }
+            }
         }
-        .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
     }
 
     private var diagnosticsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Diagnostics")
-                .font(.headline)
+            sectionHeader("Diagnostics", symbol: "waveform.path.ecg")
 
             keyValueLine("Status", viewModel.statusMessage)
             keyValueLine("Active route", viewModel.audioRouteSummary)
@@ -164,12 +210,43 @@ public struct RealtimeInterpreterView: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.red.opacity(0.92))
+                    .padding(.top, 4)
             }
         }
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
+    }
+
+    private var controlSection: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Label(viewModel.statusMessage, systemImage: viewModel.isRunning ? "dot.radiowaves.left.and.right" : "pause.circle")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(viewModel.config.strategy == .lowLatency ? "Low Latency" : "High Fidelity")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.14), in: Capsule())
+            }
+            .foregroundStyle(.white)
+
+            Button {
+                if viewModel.isRunning {
+                    viewModel.stop()
+                } else {
+                    viewModel.start()
+                }
+            } label: {
+                Label(viewModel.isRunning ? "Stop Live Translation" : "Start Live Translation", systemImage: viewModel.isRunning ? "stop.fill" : "play.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(viewModel.isRunning ? .red : .green)
+        }
         .padding(12)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .cardBackground(cornerRadius: 18, tint: .white.opacity(0.12))
     }
 
     private func keyValueLine(_ key: String, _ value: String) -> some View {
@@ -182,39 +259,60 @@ public struct RealtimeInterpreterView: View {
         }
     }
 
-    private func segmentList(_ segments: [InterpretedSegment]) -> some View {
-        Group {
+    private func sectionHeader(_ title: String, symbol: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+            Text(title)
+                .font(.headline)
+            Spacer()
+        }
+        .foregroundStyle(.primary)
+    }
+
+    private func segmentColumn(title: String, segments: [InterpretedSegment], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
             if segments.isEmpty {
-                Text("No segments yet.")
+                Text("No finalized segments.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(segments) { segment in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(segment.sourceText)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Text(segment.targetText)
-                            .font(.body)
-
-                        Text("MT latency: \(segment.translationLatencyMs) ms")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Text("Playback route: \(segment.playbackRouteLabel)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(10)
+                    .background(tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(Array(segments.suffix(5))) { segment in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(segment.sourceText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(segment.targetText)
+                                .font(.body)
+
+                            HStack {
+                                Text("\(segment.translationLatencyMs) ms")
+                                Spacer()
+                                Text(segment.playbackRouteLabel)
+                                    .lineLimit(1)
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func laneCard(title: String, text: String, color: Color) -> some View {
+    private func laneCard(title: String, text: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.subheadline)
@@ -223,8 +321,14 @@ public struct RealtimeInterpreterView: View {
             Text(text.isEmpty ? "…" : text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .background(color)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+    }
+}
+
+@available(iOS 26.4, *)
+private extension View {
+    func cardBackground(cornerRadius: CGFloat, tint: Color = Color(.systemBackground).opacity(0.92)) -> some View {
+        background(tint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

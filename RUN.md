@@ -24,6 +24,11 @@ open RealtimeInterpretationHost.xcodeproj
 
 Xcode scheme: `RealtimeInterpretationHost`
 
+Note: `xcodegen generate` is required after updates. The project spec injects:
+- `NSMicrophoneUsageDescription`
+- `NSSpeechRecognitionUsageDescription`
+- `UILaunchScreen` generation key
+
 ## CLI Build for Host App
 ```bash
 cd ios26_host_app

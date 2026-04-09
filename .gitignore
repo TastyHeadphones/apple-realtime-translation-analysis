@@ -1,0 +1,6 @@
+.DS_Store
+Translate.app/
+ios26_demo/.swiftpm/
+ios26_host_app/RealtimeInterpretationHost.xcodeproj/xcuserdata/
+ios26_host_app/RealtimeInterpretationHost.xcodeproj/project.xcworkspace/xcuserdata/
+
