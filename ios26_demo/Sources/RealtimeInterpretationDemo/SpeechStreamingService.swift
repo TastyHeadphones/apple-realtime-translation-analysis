@@ -92,14 +92,14 @@ public final class SpeechStreamingService {
         AsyncThrowingStream { continuation in
             inputContinuation = continuation
 
-            engine.inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { [weak self] buffer, _ in
-                guard let self, let copied = self.copy(buffer) else { return }
+            engine.inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { buffer, _ in
+                guard let copied = Self.copyPCMBuffer(buffer) else { return }
                 continuation.yield(AnalyzerInput(buffer: copied))
             }
         }
     }
 
-    private func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+    private nonisolated static func copyPCMBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
         guard let copied = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
             return nil
         }
