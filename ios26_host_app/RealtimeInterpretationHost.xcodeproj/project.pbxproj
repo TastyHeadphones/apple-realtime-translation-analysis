@@ -12,7 +12,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		1231660E8E40AA3F319A7B94 /* RealtimeInterpretationHost.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RealtimeInterpretationHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1231660E8E40AA3F319A7B94 /* RealtimeInterpretationHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RealtimeInterpretationHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		749922C0EE2CB330AC25CA1C /* ios26_demo */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios26_demo; path = ../ios26_demo; sourceTree = SOURCE_ROOT; };
 		96F40DCCB06CAA6AEFECB958 /* RealtimeInterpretationHostApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeInterpretationHostApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -92,8 +92,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 10F1DCD481AF3B1ED54F635E /* Build configuration list for PBXProject "RealtimeInterpretationHost" */;
 			developmentRegion = en;
@@ -189,6 +187,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 5TT564H883;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Realtime Interpretation";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required for live speech translation.";
@@ -211,6 +210,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 5TT564H883;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Realtime Interpretation";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required for live speech translation.";

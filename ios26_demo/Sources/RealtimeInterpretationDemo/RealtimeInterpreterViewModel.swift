@@ -99,16 +99,20 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
             }
 
             statusMessage = "Preparing translation models..."
-            try await forwardTranslationService.configure(
+            let forwardStrategy = try await forwardTranslationService.configure(
                 source: config.sourceLanguage,
                 target: config.targetLanguage,
                 strategy: config.strategy.translationStrategy
             )
-            try await reverseTranslationService.configure(
+            let reverseStrategy = try await reverseTranslationService.configure(
                 source: config.targetLanguage,
                 target: config.sourceLanguage,
                 strategy: config.strategy.translationStrategy
             )
+
+            if forwardStrategy != config.strategy.translationStrategy || reverseStrategy != config.strategy.translationStrategy {
+                errorMessage = "High-fidelity model was unavailable for at least one direction; using low-latency translation."
+            }
 
             refreshRouteDiagnostics()
             statusMessage = "Listening (You -> Partner)"
@@ -121,7 +125,7 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
             // Expected during stop.
         } catch {
             if runToken == token {
-                errorMessage = error.localizedDescription
+                errorMessage = describeError(error)
                 statusMessage = "Error"
             }
         }
@@ -226,7 +230,7 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
                 }
             } catch {
                 guard self.runToken == token else { return }
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = self.describeError(error)
                 self.statusMessage = "Error"
             }
         }
@@ -264,7 +268,7 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
                 }
             } catch {
                 guard self.runToken == token else { return }
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = self.describeError(error)
                 self.statusMessage = "Error"
             }
         }
@@ -294,5 +298,18 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
                 continuation.resume(returning: granted)
             }
         }
+    }
+
+    private func describeError(_ error: Error) -> String {
+        if let localized = (error as? LocalizedError)?.errorDescription, !localized.isEmpty {
+            return localized
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == "TranslationErrorDomain" && nsError.code == 16 {
+            return "Translation resources are not ready (code 16). Connect to stable Wi-Fi, open Apple Translate once to complete language downloads, then restart."
+        }
+
+        return nsError.localizedDescription
     }
 }

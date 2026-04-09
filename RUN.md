@@ -49,6 +49,17 @@ xcodebuild -project ios26_host_app/RealtimeInterpretationHost.xcodeproj -scheme 
   - microphone drives `You -> Partner`
   - text box simulates `Partner -> You`
 
+## Troubleshooting: `TranslationErrorDomain Code=16`
+- Meaning: translation language assets were not fully ready during preflight/download.
+- Current app behavior:
+  - retries preflight automatically
+  - falls back from `highFidelity` to `lowLatency` when possible
+  - shows actionable error text instead of `(null)`
+- Recovery steps on device:
+  - use stable Wi-Fi
+  - open Apple Translate once and ensure both conversation languages are fully downloaded
+  - relaunch this app and start again
+
 ## AirPods / Audio Route Notes
 - The demo attempts dual-route routing via public API:
   - `AVAudioSessionCategoryMultiRoute` + `AVAudioSessionModeDualRoute` (iOS 26.2+)
