@@ -1,5 +1,6 @@
 import AVFAudio
 import Foundation
+import FoundationModels
 import Speech
 
 private final class AnalyzerInputBridge {
@@ -93,23 +94,40 @@ public final class SpeechStreamingService {
             throw InterpretationError.unsupportedSpeechLocale(locale.identifier)
         }
 
-        try configureAudioSession()
-
         let transcriber = SpeechTranscriber(
             locale: selectedLocale,
             preset: .timeIndexedProgressiveTranscription
         )
+        let modules: [any Speech.SpeechModule] = [transcriber]
+
+        try await preflightSpeechRuntime(
+            selectedLocale: selectedLocale,
+            transcriber: transcriber
+        )
+
+        try configureAudioSession()
+
+        let inputFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
+            compatibleWith: modules,
+            considering: engine.inputNode.outputFormat(forBus: 0)
+        )
+
+        guard let analysisFormat = inputFormat else {
+            throw InterpretationError.speechInputFormatUnavailable(
+                "No compatible audio format was reported for \(selectedLocale.identifier)."
+            )
+        }
+
         let analyzer = SpeechAnalyzer(
-            modules: [transcriber],
+            modules: modules,
             options: .init(priority: .userInitiated, modelRetention: .whileInUse)
         )
 
-        let inputFormat = engine.inputNode.outputFormat(forBus: 0)
         let bridge = AnalyzerInputBridge()
         inputBridge = bridge
-        let inputStream = makeAnalyzerInputStream(engine: engine, inputFormat: inputFormat, bridge: bridge)
+        let inputStream = makeAnalyzerInputStream(engine: engine, inputFormat: analysisFormat, bridge: bridge)
 
-        try await analyzer.prepareToAnalyze(in: inputFormat)
+        try await analyzer.prepareToAnalyze(in: analysisFormat)
 
         resultTask = Task {
             for try await result in transcriber.results {
@@ -193,5 +211,109 @@ public final class SpeechStreamingService {
             throw InterpretationError.audioSessionConfigurationFailed(error.localizedDescription)
         }
         #endif
+    }
+
+    private func preflightSpeechRuntime(
+        selectedLocale: Locale,
+        transcriber: SpeechTranscriber
+    ) async throws {
+        let modules: [any Speech.SpeechModule] = [transcriber]
+        var modelAvailability = SystemLanguageModel.default.availability
+        var assetStatus = await AssetInventory.status(forModules: modules)
+
+        let shouldInstallAssets: Bool
+        switch modelAvailability {
+        case .available:
+            shouldInstallAssets = assetStatus != .installed
+        case .unavailable(.modelNotReady):
+            shouldInstallAssets = true
+        case .unavailable:
+            shouldInstallAssets = false
+        }
+
+        if shouldInstallAssets {
+            try await installSpeechAssetsIfNeeded(for: modules, locale: selectedLocale)
+            modelAvailability = SystemLanguageModel.default.availability
+            assetStatus = await AssetInventory.status(forModules: modules)
+        }
+
+        guard case .available = modelAvailability else {
+            throw InterpretationError.appleIntelligenceUnavailable(
+                descriptionForAvailability(modelAvailability, locale: selectedLocale)
+            )
+        }
+
+        guard SystemLanguageModel.default.supportsLocale(selectedLocale) else {
+            throw InterpretationError.appleIntelligenceUnavailable(
+                "The current Apple Intelligence model does not support \(selectedLocale.identifier) on this device."
+            )
+        }
+
+        guard assetStatus == .installed else {
+            throw InterpretationError.speechAssetsUnavailable(
+                "Speech assets for \(selectedLocale.identifier) are \(assetStatus)."
+            )
+        }
+
+        let compatibleFormats = await transcriber.availableCompatibleAudioFormats
+        guard !compatibleFormats.isEmpty else {
+            throw InterpretationError.speechInputFormatUnavailable(
+                "The speech transcriber reported no compatible audio formats for \(selectedLocale.identifier)."
+            )
+        }
+    }
+
+    private func installSpeechAssetsIfNeeded(
+        for modules: [any Speech.SpeechModule],
+        locale: Locale
+    ) async throws {
+        let status = await AssetInventory.status(forModules: modules)
+        guard status != .installed else {
+            return
+        }
+
+        if let request = try? await AssetInventory.assetInstallationRequest(supporting: modules) {
+            try await request.downloadAndInstall()
+        } else {
+            var currentStatus = status
+            for _ in 0..<10 where currentStatus == .downloading {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                currentStatus = await AssetInventory.status(forModules: modules)
+            }
+
+            guard currentStatus == .installed else {
+                throw InterpretationError.speechAssetsUnavailable(
+                    "Speech assets for \(locale.identifier) are \(currentStatus)."
+                )
+            }
+        }
+
+        let finalStatus = await AssetInventory.status(forModules: modules)
+        guard finalStatus == .installed else {
+            throw InterpretationError.speechAssetsUnavailable(
+                "Speech assets for \(locale.identifier) are \(finalStatus)."
+            )
+        }
+    }
+
+    private func descriptionForAvailability(
+        _ availability: SystemLanguageModel.Availability,
+        locale: Locale
+    ) -> String {
+        switch availability {
+        case .available:
+            return "Apple Intelligence is available."
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible:
+                return "This device is not eligible for Apple Intelligence."
+            case .appleIntelligenceNotEnabled:
+                return "Apple Intelligence is not enabled or is unavailable for the current region or Siri language configuration."
+            case .modelNotReady:
+                return "Apple Intelligence is still preparing the language model for \(locale.identifier)."
+            @unknown default:
+                return "Apple Intelligence is unavailable for an unknown reason."
+            }
+        }
     }
 }
