@@ -2,11 +2,80 @@ import AVFAudio
 import Foundation
 import Speech
 
+private final class AnalyzerInputBridge {
+    private let lock = NSLock()
+    private var continuation: AsyncThrowingStream<AnalyzerInput, Error>.Continuation?
+
+    func setContinuation(_ continuation: AsyncThrowingStream<AnalyzerInput, Error>.Continuation) {
+        lock.lock()
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func finish() {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.finish()
+    }
+
+    func yield(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        let continuation = self.continuation
+        lock.unlock()
+        guard let continuation else { return }
+        continuation.yield(AnalyzerInput(buffer: buffer))
+    }
+}
+
+private func makeAnalyzerInputStream(
+    engine: AVAudioEngine,
+    inputFormat: AVAudioFormat,
+    bridge: AnalyzerInputBridge
+) -> AsyncThrowingStream<AnalyzerInput, Error> {
+    AsyncThrowingStream { continuation in
+        bridge.setContinuation(continuation)
+
+        engine.inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { buffer, _ in
+            guard let copied = copyPCMBuffer(buffer) else { return }
+            bridge.yield(copied)
+        }
+    }
+}
+
+private func copyPCMBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+    guard let copied = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
+        return nil
+    }
+
+    copied.frameLength = buffer.frameLength
+
+    let channelCount = Int(buffer.format.channelCount)
+    let frameCount = Int(buffer.frameLength)
+
+    if let src = buffer.floatChannelData, let dst = copied.floatChannelData {
+        for channel in 0..<channelCount {
+            dst[channel].update(from: src[channel], count: frameCount)
+        }
+        return copied
+    }
+
+    if let src = buffer.int16ChannelData, let dst = copied.int16ChannelData {
+        for channel in 0..<channelCount {
+            dst[channel].update(from: src[channel], count: frameCount)
+        }
+        return copied
+    }
+
+    return nil
+}
+
 @available(iOS 26.0, *)
 @MainActor
 public final class SpeechStreamingService {
     private let engine = AVAudioEngine()
-    private var inputContinuation: AsyncThrowingStream<AnalyzerInput, Error>.Continuation?
+    private var inputBridge: AnalyzerInputBridge?
     private var analyzerTask: Task<Void, Error>?
     private var resultTask: Task<Void, Error>?
 
@@ -36,7 +105,9 @@ public final class SpeechStreamingService {
         )
 
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-        let inputStream = makeInputStream(inputFormat: inputFormat)
+        let bridge = AnalyzerInputBridge()
+        inputBridge = bridge
+        let inputStream = makeAnalyzerInputStream(engine: engine, inputFormat: inputFormat, bridge: bridge)
 
         try await analyzer.prepareToAnalyze(in: inputFormat)
 
@@ -69,8 +140,8 @@ public final class SpeechStreamingService {
     }
 
     public func stop() {
-        inputContinuation?.finish()
-        inputContinuation = nil
+        inputBridge?.finish()
+        inputBridge = nil
 
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning {
@@ -86,44 +157,6 @@ public final class SpeechStreamingService {
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
-    }
-
-    private func makeInputStream(inputFormat: AVAudioFormat) -> AsyncThrowingStream<AnalyzerInput, Error> {
-        AsyncThrowingStream { continuation in
-            inputContinuation = continuation
-
-            engine.inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { buffer, _ in
-                guard let copied = Self.copyPCMBuffer(buffer) else { return }
-                continuation.yield(AnalyzerInput(buffer: copied))
-            }
-        }
-    }
-
-    private nonisolated static func copyPCMBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        guard let copied = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength) else {
-            return nil
-        }
-
-        copied.frameLength = buffer.frameLength
-
-        let channelCount = Int(buffer.format.channelCount)
-        let frameCount = Int(buffer.frameLength)
-
-        if let src = buffer.floatChannelData, let dst = copied.floatChannelData {
-            for channel in 0..<channelCount {
-                dst[channel].update(from: src[channel], count: frameCount)
-            }
-            return copied
-        }
-
-        if let src = buffer.int16ChannelData, let dst = copied.int16ChannelData {
-            for channel in 0..<channelCount {
-                dst[channel].update(from: src[channel], count: frameCount)
-            }
-            return copied
-        }
-
-        return nil
     }
 
     private func configureAudioSession() throws {
