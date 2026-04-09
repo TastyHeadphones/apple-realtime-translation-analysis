@@ -2,10 +2,37 @@ import Foundation
 @preconcurrency import Translation
 
 @available(iOS 26.4, *)
+private actor TranslationRequestGate {
+    private var isBusy = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        if !isBusy {
+            isBusy = true
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        } else {
+            isBusy = false
+        }
+    }
+}
+
+@available(iOS 26.4, *)
 @MainActor
 public final class TranslationService {
     private var session: TranslationSession?
     private(set) var activeStrategy: TranslationSession.Strategy?
+    private let requestGate = TranslationRequestGate()
 
     public init() {}
 
@@ -74,12 +101,20 @@ public final class TranslationService {
             return ""
         }
 
-        let response = try await session.translate(trimmed)
-        return response.targetText
+        await requestGate.acquire()
+        do {
+            let response = try await session.translate(trimmed)
+            await requestGate.release()
+            return response.targetText
+        } catch {
+            await requestGate.release()
+            throw mapTranslationError(error, pair: pairLabel(source: session.sourceLanguage, target: session.targetLanguage))
+        }
     }
 
     public func cancel() {
-        session?.cancel()
+        // Avoid hard cancel on TranslationSession while requests are in-flight.
+        // Internal service queues can race under abrupt cancellation.
         session = nil
         activeStrategy = nil
     }
@@ -143,8 +178,8 @@ public final class TranslationService {
         return error
     }
 
-    private func pairLabel(source: Locale.Language, target: Locale.Language?) -> String {
-        let sourceIdentifier = source.maximalIdentifier
+    private func pairLabel(source: Locale.Language?, target: Locale.Language?) -> String {
+        let sourceIdentifier = source?.maximalIdentifier ?? "auto"
         let targetIdentifier = target?.maximalIdentifier ?? "auto"
         return "\(sourceIdentifier) -> \(targetIdentifier)"
     }

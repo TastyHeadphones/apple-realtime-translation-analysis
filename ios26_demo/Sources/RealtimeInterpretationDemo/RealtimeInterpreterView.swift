@@ -75,19 +75,32 @@ public struct RealtimeInterpreterView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Conversation Setup", symbol: "gearshape.2")
 
-            HStack(spacing: 8) {
-                TextField("Your locale (en-US)", text: $viewModel.config.sourceLocaleIdentifier)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
+            HStack(alignment: .center, spacing: 10) {
+                languagePicker(
+                    title: "You Speak",
+                    selection: $viewModel.config.source
+                )
 
-                Image(systemName: "arrow.left.and.right")
-                    .foregroundStyle(.secondary)
+                Button {
+                    viewModel.config.swapLanguages()
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right.circle.fill")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Swap languages")
 
-                TextField("Partner locale (es-ES)", text: $viewModel.config.targetLocaleIdentifier)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
+                languagePicker(
+                    title: "Partner Speaks",
+                    selection: $viewModel.config.target
+                )
+            }
+            .onChange(of: viewModel.config.source) { _, _ in
+                viewModel.config.enforceDistinctPair(changedSide: .source)
+            }
+            .onChange(of: viewModel.config.target) { _, _ in
+                viewModel.config.enforceDistinctPair(changedSide: .target)
             }
 
             Picker("Translation strategy", selection: $viewModel.config.strategy) {
@@ -144,7 +157,7 @@ public struct RealtimeInterpreterView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Partner → You (Text Sim)", symbol: "earbuds")
 
-            TextField("Type partner speech in partner language", text: $viewModel.partnerInputText)
+            TextField("Type partner speech in \(viewModel.config.target.displayName)", text: $viewModel.partnerInputText)
                 .textFieldStyle(.roundedBorder)
                 .disabled(!viewModel.isRunning)
 
@@ -267,6 +280,31 @@ public struct RealtimeInterpreterView: View {
             Spacer()
         }
         .foregroundStyle(.primary)
+    }
+
+    private func languagePicker(
+        title: String,
+        selection: Binding<InterpretationConfig.SupportedLanguage>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Picker(title, selection: selection) {
+                ForEach(InterpretationConfig.supportedLanguages) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(selection.wrappedValue.rawValue)
+                .font(.caption2.monospaced())
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func segmentColumn(title: String, segments: [InterpretedSegment], tint: Color) -> some View {

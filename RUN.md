@@ -42,6 +42,10 @@ xcodebuild -project ios26_host_app/RealtimeInterpretationHost.xcodeproj -scheme 
 ```
 
 ## Runtime Notes
+- Supported languages are fixed to:
+  - Chinese (Mandarin) `zh-CN`
+  - English (US) `en-US`
+  - Japanese `ja-JP`
 - Start with `lowLatency` strategy for simultaneous feel.
 - Use `highFidelity` when translation quality is more important than immediacy.
 - Partial translation throttle defaults to `350ms`; tune this for UX smoothness.

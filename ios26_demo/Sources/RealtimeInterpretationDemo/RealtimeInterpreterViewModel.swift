@@ -28,6 +28,8 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
     private var stabilizer = TranscriptStabilizer()
     private var runTask: Task<Void, Never>?
     private var partialTranslationTask: Task<Void, Never>?
+    private var userFinalTranslationTask: Task<Void, Never>?
+    private var partnerFinalTranslationTask: Task<Void, Never>?
     private var runToken = UUID()
     private var lastPartialTranslationAt: Date = .distantPast
 
@@ -60,6 +62,12 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
 
         partialTranslationTask?.cancel()
         partialTranslationTask = nil
+
+        userFinalTranslationTask?.cancel()
+        userFinalTranslationTask = nil
+
+        partnerFinalTranslationTask?.cancel()
+        partnerFinalTranslationTask = nil
 
         speechService.stop()
         forwardTranslationService.cancel()
@@ -201,7 +209,8 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
     private func translateUserFinalSegment(_ sourceText: String, token: UUID) {
         let started = DispatchTime.now().uptimeNanoseconds
 
-        Task { [weak self] in
+        userFinalTranslationTask?.cancel()
+        userFinalTranslationTask = Task { [weak self] in
             guard let self else { return }
 
             do {
@@ -239,7 +248,8 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
     private func translatePartnerSegment(_ sourceText: String, token: UUID) {
         let started = DispatchTime.now().uptimeNanoseconds
 
-        Task { [weak self] in
+        partnerFinalTranslationTask?.cancel()
+        partnerFinalTranslationTask = Task { [weak self] in
             guard let self else { return }
 
             do {
