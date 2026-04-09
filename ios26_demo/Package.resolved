@@ -1,0 +1,24 @@
+{
+  "originHash" : "474915f8cfc39c85ab2c39913058d8817fcc66489ab8e07d81737e4d168ea8d4",
+  "pins" : [
+    {
+      "identity" : "llama.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/llama.swift.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "669b01737ed008c0c8e240e1aa3d5270f90b9b11"
+      }
+    },
+    {
+      "identity" : "swiftwhisper",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/exPHAT/SwiftWhisper.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "c340197966ebd264f3135d3955874b40f8ed58bc"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -1,61 +1,55 @@
-# DEMO_ARCHITECTURE
+# Demo Architecture
 
 ## Goal
-Approximate Apple-like live translation UX with public iOS 26.4 APIs and low perceived latency.
 
-## Runtime Pipeline
-1. Audio ingress
-- `AVAudioEngine` captures live microphone PCM buffers.
-- Buffers are streamed into `SpeechAnalyzer` as `AnalyzerInput`.
+Reproduce Apple-style live interpretation on iPhone without Apple Intelligence dependencies.
 
-2. Incremental ASR
-- `SpeechTranscriber(locale:preset:)` with `.timeIndexedProgressiveTranscription` emits progressive transcript results.
-- Each ASR result is treated as partial or final via `isFinal`.
+## Current architecture
 
-3. Stabilization
-- `TranscriptStabilizer` tracks committed transcript text and computes a stable tail delta.
-- Partial text remains in a live lane; final text is committed per segment.
+### Capture
+- `LocalSpeechStreamingService`
+- `AVAudioEngine` microphone tap
+- resamples to 16 kHz mono float PCM
+- buffers audio in rolling windows
 
-4. Translation
-- `TranslationService` wraps `TranslationSession(installedSource:target:preferredStrategy:)`.
-- `preferredStrategy` is configurable (`lowLatency` vs `highFidelity`).
-- Partial translation is throttled to reduce flicker and compute churn.
-- Two directional translation sessions:
-  - `You -> Partner` (microphone transcript direction)
-  - `Partner -> You` (simulated partner text direction)
-- Finalized source segments are translated and recorded with per-segment MT latency.
+### Speech-to-text
+- `SwiftWhisper`
+- selected Whisper model:
+  - `ggml-base-q5_1.bin` for the fastest preset
+  - `ggml-small-q5_1.bin` for the balanced and quality presets
+- emits partial transcript updates every few hundred milliseconds
+- finalizes on speech pause
 
-5. Output rendering
-- SwiftUI view shows:
-  - `You -> Partner` partial lane
-  - `Partner -> You` simulated input lane
-  - finalized segment lists per direction (source, target, latency, playback-route label)
-  - diagnostics/status
+### Translation
+- `LocalTranslationService`
+- local GGUF model loaded through `llama.swift`
+- selected model:
+  - `Qwen2.5-0.5B-Instruct-Q4_K_M.gguf`
+  - `Qwen2.5-0.5B-Instruct-Q6_K.gguf`
+- streams translated text token by token
+- uses a translation prompt that only asks for the target language output
 
-6. Optional speech output
-- Final translated segments are synthesized via `AVSpeechSynthesizer`.
-- Audio routing intent is split by direction:
-  - to partner: iPhone built-in speaker target
-  - to user: headset/earphone target
-- Routing uses:
-  - `AVAudioSession` dual-route configuration when available (`.multiRoute + .dualRoute`)
-  - `AVSpeechSynthesizer.outputChannels` bound to route channel descriptions
+### Orchestration
+- `RealtimeInterpreterViewModel`
+- throttles partial translation requests
+- keeps partial and final states separate
+- preserves segment history and latency timing
 
-## Components
-- `SpeechStreamingService`: microphone + progressive transcription stream.
-- `TranscriptStabilizer`: partial/final state transitions.
-- `TranslationService`: translation-session lifecycle and calls.
-- `RoutedSpeechOutputService`: route introspection and per-lane speech output targeting.
-- `RealtimeInterpreterViewModel`: orchestration, throttling, cancellation, dual-direction translation, segment bookkeeping.
-- `RealtimeInterpreterView`: demo UI.
+### Output
+- `RoutedSpeechOutputService`
+- `AVSpeechSynthesizer` for optional translated speech
+- route-aware playback for phone speaker vs earphones
 
-## Why this architecture is the best tradeoff
-- Uses only public APIs available in iOS 26.4.
-- Preserves the core semantics observed in Apple’s stack: progressive updates, finality, latency strategy selection.
-- Keeps stage boundaries explicit for tuning and observability.
-- Avoids private runtime assumptions while still matching the perceived “simultaneous” UX pattern.
+## Why this design
 
-## Non-goals
-- No private API invocation.
-- No reverse-engineered proprietary algorithms.
-- No hardware-gated behavior spoofing.
+- Small enough to run on an iPhone
+- Downloadable in preset bundles instead of raw model management
+- Incremental enough to feel simultaneous
+- Easier to maintain than a single huge end-to-end model path
+
+## Known limitations
+
+- Whisper chunking is not perfect streaming ASR
+- Translation quality depends on the selected GGUF model
+- TTS is still system-based, not a local neural TTS model
+

@@ -11,10 +11,9 @@ struct RealtimeInterpretationHostApp: App {
                 ContentUnavailableView(
                     "Requires iOS 26.4+",
                     systemImage: "iphone.gen3.slash",
-                    description: Text("This demo depends on iOS 26.4 Translation and Speech APIs.")
+                    description: Text("This demo runs a local speech and translation pipeline on iOS 26.4+.")
                 )
             }
         }
     }
 }
-

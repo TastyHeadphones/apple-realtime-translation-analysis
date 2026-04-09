@@ -12,9 +12,17 @@ let package = Package(
             targets: ["RealtimeInterpretationDemo"]
         )
     ],
+    dependencies: [
+        .package(path: "Vendor/llama.swift"),
+        .package(url: "https://github.com/exPHAT/SwiftWhisper.git", branch: "master")
+    ],
     targets: [
         .target(
-            name: "RealtimeInterpretationDemo"
+            name: "RealtimeInterpretationDemo",
+            dependencies: [
+                .product(name: "LlamaSwift", package: "llama.swift"),
+                .product(name: "SwiftWhisper", package: "SwiftWhisper")
+            ]
         )
     ]
 )

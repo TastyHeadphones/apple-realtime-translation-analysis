@@ -1,5 +1,7 @@
 # Phase 1 Research: Apple Translate Package Real-Time Interpretation
 
+Note: the shipped demo in this repository now uses a local Whisper + GGUF LLM pipeline to reproduce the same user experience without Apple Intelligence dependencies.
+
 ## Scope
 - [Confirmed] Primary artifact inspected: `Translate.app`.
 - [Confirmed] Additional runtime components inspected only when directly required to explain Translate runtime behavior: `Translation*`, `SpeechTranslation`, launchd entries, and translation asset catalogs under `/System/Library`.

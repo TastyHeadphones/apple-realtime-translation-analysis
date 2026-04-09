@@ -1,79 +1,49 @@
 # RUN
 
 ## Prerequisites
-- Xcode 26.4+ with iOS 26.4 SDK
-- iOS deployment target 26.4
+
+- Xcode 26.4+
+- iOS 26.4 simulator or device
 - Microphone permission
-- Installed translation/speech assets for selected language pair on device
-- `xcodegen` (for regenerating the host app project)
+- Enough free disk space for the selected preset
 
-## Build Check (already verified)
-```bash
-cd ios26_demo
-xcodebuild -scheme RealtimeInterpretationDemo -destination 'generic/platform=iOS Simulator' build
-```
-
-## Open and Run the Host App
-This repo now includes a runnable iOS app project at `ios26_host_app/`.
+## Build
 
 ```bash
-cd ios26_host_app
-xcodegen generate
-open RealtimeInterpretationHost.xcodeproj
-```
-
-Xcode scheme: `RealtimeInterpretationHost`
-
-Note: `xcodegen generate` is required after updates. The project spec injects:
-- `NSMicrophoneUsageDescription`
-- `NSSpeechRecognitionUsageDescription`
-- `UILaunchScreen` generation key
-
-## CLI Build for Host App
-```bash
+./scripts/bootstrap_llama_runtime.sh
 cd ios26_host_app
 xcodegen generate
 xcodebuild -project RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
 ```
 
-## Build Without Xcode UI (direct from repo root)
+## Launch
+
 ```bash
-xcodebuild -project ios26_host_app/RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
+./scripts/bootstrap_llama_runtime.sh
+cd ios26_host_app
+open RealtimeInterpretationHost.xcodeproj
 ```
 
-## Runtime Notes
-- Supported languages are fixed to:
-  - Chinese (Mandarin) `zh-CN`
-  - English (US) `en-US`
-  - Japanese `ja-JP`
-- Start with `lowLatency` strategy for simultaneous feel.
-- Use `highFidelity` when translation quality is more important than immediacy.
-- Partial translation throttle defaults to `350ms`; tune this for UX smoothness.
-- Current UI flow:
-  - microphone drives `You -> Partner`
-  - text box simulates `Partner -> You`
+Scheme:
+- `RealtimeInterpretationHost`
 
-## Troubleshooting: `TranslationErrorDomain Code=16`
-- Meaning: translation language assets were not fully ready during preflight/download.
-- Current app behavior:
-  - retries preflight automatically
-  - falls back from `highFidelity` to `lowLatency` when possible
-  - shows actionable error text instead of `(null)`
-- Recovery steps on device:
-  - use stable Wi-Fi
-  - open Apple Translate once and ensure both conversation languages are fully downloaded
-  - relaunch this app and start again
+## How to use
 
-## AirPods / Audio Route Notes
-- The demo attempts dual-route routing via public API:
-  - `AVAudioSessionCategoryMultiRoute` + `AVAudioSessionModeDualRoute` (iOS 26.2+)
-  - fallback to `PlayAndRecord` when dual-route is unavailable
-- For production-like behavior, test route latency and duplex quality on:
-  - built-in mic/speaker
-  - wired headset
-  - supported newer AirPods models
-- Diagnostics panel exposes:
-  - active route
-  - playback target route for `to partner`
-  - playback target route for `to me`
-  - dual-route active state
+1. Pick a preset in the app.
+2. Download the preset.
+3. Choose source and target languages.
+4. Tap `Start Live Translation`.
+
+## Behavior
+
+- Live speech is chunked and transcribed locally.
+- Partial text updates appear before segment finalization.
+- Translation updates stream from the local LLM.
+- Optional TTS uses the iPhone’s built-in speech synthesizer.
+
+## Troubleshooting
+
+- If the app says the preset is missing, tap `Download Selected Preset`.
+- If Xcode cannot find `llama-cpp.xcframework`, rerun `./scripts/bootstrap_llama_runtime.sh`.
+- If the build complains about packages, rerun `xcodegen generate`.
+- If the mic starts but no text appears, check the microphone permission and speak continuously for a few seconds.

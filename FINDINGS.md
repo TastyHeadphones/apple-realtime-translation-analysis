@@ -2,7 +2,7 @@
 
 ## Scope
 - [Confirmed] Analysis stayed focused on `Translate.app` and directly related translation runtime components.
-- [Confirmed] Demo implementation uses only public iOS 26 APIs (`Translation`, `Speech`, `AVFAudio`, `SwiftUI`).
+- [Confirmed] The current shipped demo uses a local third-party stack (`SwiftWhisper`, `llama.swift`, `AVFAudio`, `SwiftUI`) rather than Apple Intelligence.
 - [Confirmed] No private API calls, no entitlements abuse, and no proprietary code reconstruction were used.
 
 ## Translate Runtime Signals
@@ -23,8 +23,7 @@
 - [Unknown] Exact internal gating logic for AirPods model checks and route-policy thresholds.
 
 ## Practical Reproduction Outcome
-- [Confirmed] A working iOS 26.4 Swift package demo was built and simulator-compiled (`xcodebuild` success).
-- [Confirmed] Demo reproduces the core live experience pattern:
+- [Likely] The local-model demo reproduces the core live experience pattern:
   - continuous microphone ingest
   - progressive source transcript updates (`You -> Partner`)
   - throttled partial translation updates

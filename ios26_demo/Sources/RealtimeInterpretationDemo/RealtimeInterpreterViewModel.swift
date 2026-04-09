@@ -15,18 +15,23 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
     @Published public var mePlaybackSummary: String = "System default"
     @Published public var isDualRouteActive: Bool = false
 
+    @Published public var modelDownloadMessage: String = "No download in progress"
+    @Published public var modelDownloadFraction: Double = 0
+    @Published public var isDownloadingModels: Bool = false
+
     @Published public var sourcePartialText: String = ""
     @Published public var targetPartialText: String = ""
     @Published public var partnerInputText: String = ""
     @Published public var segments: [InterpretedSegment] = []
 
-    private let speechService = SpeechStreamingService()
-    private let forwardTranslationService = TranslationService()
-    private let reverseTranslationService = TranslationService()
+    private let modelStore = LocalModelStore.shared
+    private let speechService = LocalSpeechStreamingService()
+    private let translationService = LocalTranslationService()
     private let speechOutputService = RoutedSpeechOutputService()
 
     private var stabilizer = TranscriptStabilizer()
     private var runTask: Task<Void, Never>?
+    private var downloadTask: Task<Void, Never>?
     private var partialTranslationTask: Task<Void, Never>?
     private var userFinalTranslationTask: Task<Void, Never>?
     private var partnerFinalTranslationTask: Task<Void, Never>?
@@ -34,11 +39,11 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
     private var partialRequestGeneration: UInt64 = 0
     private var userFinalRequestGeneration: UInt64 = 0
     private var partnerFinalRequestGeneration: UInt64 = 0
-    private var reverseTranslationPrepared = false
     private var lastPartialTranslationAt: Date = .distantPast
 
     public init() {
         refreshRouteDiagnostics()
+        refreshModelDiagnostics()
     }
 
     public func start() {
@@ -49,10 +54,10 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         refreshRouteDiagnostics()
 
         isRunning = true
-        statusMessage = "Preparing..."
+        statusMessage = "Preparing local models..."
 
         let token = runToken
-        runTask = Task { [weak self] in
+        runTask = Task { @MainActor [weak self] in
             guard let self else { return }
             await self.runRealtimeLoop(token: token)
         }
@@ -64,22 +69,51 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         runTask?.cancel()
         runTask = nil
 
+        downloadTask?.cancel()
+        downloadTask = nil
+
         partialTranslationTask?.cancel()
         partialTranslationTask = nil
 
+        userFinalTranslationTask?.cancel()
         userFinalTranslationTask = nil
 
+        partnerFinalTranslationTask?.cancel()
         partnerFinalTranslationTask = nil
 
-        speechService.stop()
-        forwardTranslationService.cancel()
-        reverseTranslationService.cancel()
+        Task { await speechService.stop() }
         speechOutputService.stopAll()
-        reverseTranslationPrepared = false
 
         isRunning = false
         statusMessage = "Stopped"
         refreshRouteDiagnostics()
+    }
+
+    public func downloadSelectedPreset() {
+        guard downloadTask == nil else { return }
+
+        let preset = config.preset
+        modelDownloadMessage = "Downloading \(preset.title) preset..."
+        modelDownloadFraction = 0
+        isDownloadingModels = true
+
+        downloadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.modelStore.ensureDownloaded(for: preset) { [weak self] progress in
+                    await self?.applyDownloadProgress(progress)
+                }
+                self.modelDownloadMessage = "\(preset.title) preset is ready."
+                self.modelDownloadFraction = 1
+                self.isDownloadingModels = false
+                self.downloadTask = nil
+            } catch {
+                self.errorMessage = self.describeError(error)
+                self.modelDownloadMessage = "Download failed."
+                self.isDownloadingModels = false
+                self.downloadTask = nil
+            }
+        }
     }
 
     public func submitPartnerText() {
@@ -106,25 +140,21 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         do {
             let micGranted = await requestMicrophonePermission()
             guard micGranted else {
-                throw InterpretationError.audioSessionConfigurationFailed("Microphone permission was denied.")
+                throw InterpretationError.microphonePermissionDenied
             }
 
-            statusMessage = "Preparing translation models..."
-            let forwardStrategy = try await forwardTranslationService.configure(
-                source: config.sourceLanguage,
-                target: config.targetLanguage,
-                strategy: config.strategy.translationStrategy
-            )
-            reverseTranslationPrepared = false
+            statusMessage = "Checking selected preset..."
+            let preset = config.preset
+            let urls = try await ensurePresetModelsDownloaded(preset: preset)
 
-            if forwardStrategy != config.strategy.translationStrategy {
-                errorMessage = "High-fidelity model was unavailable for at least one direction; using low-latency translation."
-            }
+            statusMessage = "Loading Whisper and local translator..."
+            await speechService.configure(modelURL: urls.speechModelURL)
+            try await translationService.configure(modelURL: urls.translationModelURL)
 
             refreshRouteDiagnostics()
             statusMessage = "Listening (You -> Partner)"
 
-            try await speechService.run(locale: config.sourceLocale) { [weak self] update in
+            try await speechService.run { [weak self] update in
                 guard let self else { return }
                 await self.handleTranscript(update, token: token)
             }
@@ -144,6 +174,33 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
                 statusMessage = "Idle"
             }
         }
+    }
+
+    private func ensurePresetModelsDownloaded(preset: LocalRealtimePreset) async throws -> LocalPresetModelURLs {
+        isDownloadingModels = true
+        modelDownloadMessage = "Preparing \(preset.title) preset..."
+        modelDownloadFraction = 0
+
+        defer {
+            isDownloadingModels = false
+        }
+
+        return try await modelStore.ensureDownloaded(for: preset) { [weak self] progress in
+            await self?.applyDownloadProgress(progress)
+        }
+    }
+
+    private func applyDownloadProgress(_ progress: LocalModelDownloadProgress) {
+        let stageName = progress.stage.label
+        let percent = Int((progress.fractionCompleted * 100).rounded())
+        let totalLabel: String
+        if let totalBytes = progress.totalBytes {
+            totalLabel = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        } else {
+            totalLabel = "unknown size"
+        }
+        modelDownloadMessage = "\(progress.preset.title): \(stageName) \(percent)% of \(totalLabel)"
+        modelDownloadFraction = progress.fractionCompleted
     }
 
     private func handleTranscript(_ update: TranscriptUpdate, token: UUID) async {
@@ -184,7 +241,7 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         let elapsed = now.timeIntervalSince(lastPartialTranslationAt)
         let delaySeconds = max(0, throttleSeconds - elapsed)
 
-        partialTranslationTask = Task { [weak self] in
+        partialTranslationTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
             if delaySeconds > 0 {
@@ -194,16 +251,12 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
 
             guard !Task.isCancelled, self.runToken == token, self.partialRequestGeneration == generation else { return }
             self.lastPartialTranslationAt = Date()
-
-            // Run translation without exposing cancellation to TranslationSession internals.
-            Task { [weak self] in
-                await self?.translatePartialSegment(
-                    trimmed,
-                    sourcePartialSnapshot: partialText,
-                    token: token,
-                    generation: generation
-                )
-            }
+            await self.translatePartialSegment(
+                trimmed,
+                sourcePartialSnapshot: partialText,
+                token: token,
+                generation: generation
+            )
         }
     }
 
@@ -212,11 +265,23 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
 
         userFinalRequestGeneration &+= 1
         let generation = userFinalRequestGeneration
-        userFinalTranslationTask = Task { [weak self] in
+        userFinalTranslationTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
             do {
-                let translated = try await self.forwardTranslationService.translate(sourceText)
+                let translated = try await self.translationService.translate(
+                    sourceText,
+                    source: self.config.sourceLanguage,
+                    target: self.config.targetLanguage
+                ) { [weak self] partial in
+                    await self?.updateTranslatedPartial(
+                        partial,
+                        sourceSnapshot: sourceText,
+                        token: token,
+                        generation: generation
+                    )
+                }
+
                 guard self.runToken == token, self.userFinalRequestGeneration == generation else { return }
 
                 let ended = DispatchTime.now().uptimeNanoseconds
@@ -252,16 +317,23 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
 
         partnerFinalRequestGeneration &+= 1
         let generation = partnerFinalRequestGeneration
-        partnerFinalTranslationTask = Task { [weak self] in
+        partnerFinalTranslationTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
             do {
-                let reverseUsedFallback = try await self.configureReverseTranslationIfNeeded()
-                if reverseUsedFallback {
-                    self.errorMessage = "High-fidelity model was unavailable for partner-to-you direction; using low-latency translation."
+                let translated = try await self.translationService.translate(
+                    sourceText,
+                    source: self.config.targetLanguage,
+                    target: self.config.sourceLanguage
+                ) { [weak self] partial in
+                    await self?.updateTranslatedPartial(
+                        partial,
+                        sourceSnapshot: sourceText,
+                        token: token,
+                        generation: generation
+                    )
                 }
 
-                let translated = try await self.reverseTranslationService.translate(sourceText)
                 guard self.runToken == token, self.partnerFinalRequestGeneration == generation else { return }
 
                 let ended = DispatchTime.now().uptimeNanoseconds
@@ -292,6 +364,55 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         }
     }
 
+    private func translatePartialSegment(
+        _ sourceText: String,
+        sourcePartialSnapshot: String,
+        token: UUID,
+        generation: UInt64
+    ) async {
+        do {
+            let translated = try await translationService.translate(
+                sourceText,
+                source: config.sourceLanguage,
+                target: config.targetLanguage
+            ) { [weak self] partial in
+                await self?.updateTranslatedPartial(
+                    partial,
+                    sourceSnapshot: sourcePartialSnapshot,
+                    token: token,
+                    generation: generation
+                )
+            }
+
+            guard runToken == token, partialRequestGeneration == generation else { return }
+            if sourcePartialText == sourcePartialSnapshot {
+                targetPartialText = translated
+            }
+        } catch {
+            // Partial translation failures should not interrupt the live pipeline.
+        }
+    }
+
+    private func updateTranslatedPartial(
+        _ translatedText: String,
+        sourceSnapshot: String,
+        token: UUID,
+        generation: UInt64
+    ) async {
+        guard runToken == token else { return }
+        guard sourcePartialText == sourceSnapshot || !sourceSnapshot.isEmpty else { return }
+
+        if generation == partialRequestGeneration || generation == userFinalRequestGeneration || generation == partnerFinalRequestGeneration {
+            targetPartialText = translatedText
+        }
+    }
+
+    public func refreshModelDiagnostics() {
+        let preset = config.preset
+        modelDownloadMessage = "\(preset.title) preset selected. \(preset.estimatedSizeLabel) total."
+        modelDownloadFraction = 0
+    }
+
     private func refreshRouteDiagnostics() {
         speechOutputService.refreshRouting()
         audioRouteSummary = speechOutputService.routeSummary
@@ -310,45 +431,7 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
         partialRequestGeneration = 0
         userFinalRequestGeneration = 0
         partnerFinalRequestGeneration = 0
-        reverseTranslationPrepared = false
         lastPartialTranslationAt = .distantPast
-    }
-
-    private func translatePartialSegment(
-        _ sourceText: String,
-        sourcePartialSnapshot: String,
-        token: UUID,
-        generation: UInt64
-    ) async {
-        do {
-            let translated = try await forwardTranslationService.translate(sourceText)
-            guard runToken == token, partialRequestGeneration == generation else { return }
-
-            if sourcePartialText == sourcePartialSnapshot {
-                targetPartialText = translated
-            }
-        } catch {
-            // Partial translation failures should not interrupt the live pipeline.
-        }
-    }
-
-    private func configureReverseTranslationIfNeeded() async throws -> Bool {
-        let preferredStrategy = config.strategy.translationStrategy
-
-        if reverseTranslationPrepared {
-            if let active = reverseTranslationService.activeStrategy {
-                return active != preferredStrategy
-            }
-            return false
-        }
-
-        let configuredStrategy = try await reverseTranslationService.configure(
-            source: config.targetLanguage,
-            target: config.sourceLanguage,
-            strategy: preferredStrategy
-        )
-        reverseTranslationPrepared = true
-        return configuredStrategy != preferredStrategy
     }
 
     private func requestMicrophonePermission() async -> Bool {
@@ -364,11 +447,6 @@ public final class RealtimeInterpreterViewModel: ObservableObject {
             return localized
         }
 
-        let nsError = error as NSError
-        if nsError.domain == "TranslationErrorDomain" && nsError.code == 16 {
-            return "Translation resources are not ready (code 16). Connect to stable Wi-Fi, open Apple Translate once to complete language downloads, then restart."
-        }
-
-        return nsError.localizedDescription
+        return (error as NSError).localizedDescription
     }
 }

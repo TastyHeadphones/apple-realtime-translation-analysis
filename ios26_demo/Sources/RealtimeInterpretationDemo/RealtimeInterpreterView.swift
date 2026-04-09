@@ -13,9 +13,9 @@ public struct RealtimeInterpreterView: View {
             ZStack {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.07, green: 0.11, blue: 0.20),
-                        Color(red: 0.05, green: 0.24, blue: 0.30),
-                        Color(red: 0.09, green: 0.13, blue: 0.16)
+                        Color(red: 0.06, green: 0.09, blue: 0.16),
+                        Color(red: 0.08, green: 0.20, blue: 0.28),
+                        Color(red: 0.10, green: 0.12, blue: 0.18)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -25,6 +25,7 @@ public struct RealtimeInterpreterView: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         headerSection
+                        presetSection
                         configurationSection
                         liveSection
                         partnerInputSection
@@ -49,7 +50,7 @@ public struct RealtimeInterpreterView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Interpreter")
+                Text("Local Interpreter")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
 
@@ -63,12 +64,52 @@ public struct RealtimeInterpreterView: View {
                     .background(.white.opacity(0.14), in: Capsule())
             }
 
-            Text("AirPods lane for you, iPhone lane for partner speech.")
+            Text("Download a local preset, then run live speech-to-text and translation on device.")
                 .font(.footnote)
                 .foregroundStyle(.white.opacity(0.85))
         }
         .padding(14)
         .cardBackground(cornerRadius: 20, tint: .white.opacity(0.12))
+    }
+
+    private var presetSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Local Model Preset", symbol: "cpu")
+
+            Picker("Preset", selection: $viewModel.config.preset) {
+                ForEach(InterpretationConfig.supportedPresets) { preset in
+                    Text(preset.title).tag(preset)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.config.preset) { _, _ in
+                viewModel.refreshModelDiagnostics()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.config.preset.subtitle)
+                    .font(.subheadline)
+                Text(viewModel.config.preset.estimatedSizeLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                viewModel.downloadSelectedPreset()
+            } label: {
+                Label("Download Selected Preset", systemImage: "arrow.down.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(viewModel.isDownloadingModels || viewModel.isRunning)
+
+            ProgressView(value: viewModel.modelDownloadFraction)
+            Text(viewModel.modelDownloadMessage)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
     }
 
     private var configurationSection: some View {
@@ -102,12 +143,6 @@ public struct RealtimeInterpreterView: View {
             .onChange(of: viewModel.config.target) { _, _ in
                 viewModel.config.enforceDistinctPair(changedSide: .target)
             }
-
-            Picker("Translation strategy", selection: $viewModel.config.strategy) {
-                Text("Low Latency").tag(InterpretationConfig.Strategy.lowLatency)
-                Text("High Fidelity").tag(InterpretationConfig.Strategy.highFidelity)
-            }
-            .pickerStyle(.segmented)
 
             HStack {
                 Text("Partial update throttle")
@@ -237,7 +272,7 @@ public struct RealtimeInterpreterView: View {
                 Label(viewModel.statusMessage, systemImage: viewModel.isRunning ? "dot.radiowaves.left.and.right" : "pause.circle")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text(viewModel.config.strategy == .lowLatency ? "Low Latency" : "High Fidelity")
+                Text(viewModel.config.preset.title)
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)

@@ -20,7 +20,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Realtime Interpretation
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Microphone access is required for live speech translation.
-        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Speech recognition is required for real-time transcription.
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.tastyheadphones.RealtimeInterpretationHost

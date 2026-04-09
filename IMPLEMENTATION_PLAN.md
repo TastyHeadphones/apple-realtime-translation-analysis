@@ -1,34 +1,18 @@
-# IMPLEMENTATION_PLAN
+# Implementation Plan
 
-## Phase 1: Research (Completed)
-1. Inspect `Translate.app` package structure and binary metadata.
-2. Inspect directly related runtime frameworks and daemons required to explain Translate behavior.
-3. Gather static signals for streaming/incremental speech translation.
-4. Distill confirmed vs inferred behaviors and recommend a reproducible architecture.
+## Completed
 
-Status: Completed (`RESEARCH.md`).
+1. Replaced the Apple Translate / Apple Intelligence pipeline.
+2. Added local model presets with download-on-demand.
+3. Wired live microphone capture to local Whisper transcription.
+4. Wired partial and final translation to a local GGUF LLM.
+5. Updated the SwiftUI demo to expose model selection and download progress.
+6. Regenerated the host app project from `project.yml`.
 
-## Phase 2: Demo Build (Completed)
-1. Create iOS 26.4 Swift package (`ios26_demo`).
-2. Implement streaming microphone + progressive ASR service.
-3. Implement transcript stabilizer for partial/final transitions.
-4. Implement translation wrappers using `TranslationSession` with strategy control for both conversation directions.
-5. Implement orchestrating view model with:
-- start/stop lifecycle
-- partial translation throttling
-- final segment translation and latency tracking
-- directional playback targets (`to partner`, `to me`)
-- optional TTS
-6. Implement route-aware speech output service:
-- dual-route audio session attempt (`AVAudioSessionModeDualRoute`) with fallback
-- `AVSpeechSynthesizer.outputChannels` lane targeting
-7. Implement SwiftUI demo screen.
-8. Build-verify on iOS simulator toolchain.
+## Next
 
-Status: Completed (`xcodebuild` succeeded on 2026-04-09).
+1. Verify the app builds cleanly in Xcode.
+2. Tune the Whisper windowing thresholds on a real device.
+3. Measure latency for each preset.
+4. Optionally add a local TTS model if you want the spoken output fully offline.
 
-## Validation Plan (Next)
-1. Run on physical iOS 26 device with microphone permission flow.
-2. Measure latency per stage (ASR partial, ASR final, MT final, TTS start).
-3. Tune throttling and segment commit heuristics for perceived simultaneity.
-4. Compare external headset routes (including newer AirPods) vs built-in mic/speaker paths.

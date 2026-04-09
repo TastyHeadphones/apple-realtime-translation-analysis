@@ -1,5 +1,4 @@
 import Foundation
-import Translation
 
 public struct InterpretationConfig: Sendable {
     public enum SupportedLanguage: String, CaseIterable, Identifiable, Sendable {
@@ -25,37 +24,22 @@ public struct InterpretationConfig: Sendable {
         }
     }
 
-    public enum Strategy: String, CaseIterable, Sendable {
-        case lowLatency
-        case highFidelity
-
-        @available(iOS 26.4, *)
-        var translationStrategy: TranslationSession.Strategy {
-            switch self {
-            case .lowLatency:
-                return .lowLatency
-            case .highFidelity:
-                return .highFidelity
-            }
-        }
-    }
-
     public var source: SupportedLanguage
     public var target: SupportedLanguage
-    public var strategy: Strategy
+    public var preset: LocalRealtimePreset
     public var partialTranslationThrottleMs: Int
     public var speakTranslatedOutput: Bool
 
     public init(
         source: SupportedLanguage = .englishUS,
         target: SupportedLanguage = .japanese,
-        strategy: Strategy = .lowLatency,
+        preset: LocalRealtimePreset = .realtime,
         partialTranslationThrottleMs: Int = 350,
         speakTranslatedOutput: Bool = false
     ) {
         self.source = source
         self.target = target
-        self.strategy = strategy
+        self.preset = preset
         self.partialTranslationThrottleMs = partialTranslationThrottleMs
         self.speakTranslatedOutput = speakTranslatedOutput
 
@@ -66,6 +50,10 @@ public struct InterpretationConfig: Sendable {
 
     public static var supportedLanguages: [SupportedLanguage] {
         SupportedLanguage.allCases
+    }
+
+    public static var supportedPresets: [LocalRealtimePreset] {
+        LocalRealtimePreset.allCases
     }
 
     public var sourceLocaleIdentifier: String {
@@ -111,6 +99,18 @@ public struct InterpretationConfig: Sendable {
         targetLocale.language
     }
 
+    public var presetTitle: String {
+        preset.title
+    }
+
+    public var presetDescription: String {
+        preset.subtitle
+    }
+
+    public var presetSizeLabel: String {
+        preset.estimatedSizeLabel
+    }
+
     private static func defaultCompanion(for language: SupportedLanguage) -> SupportedLanguage {
         switch language {
         case .englishUS:
@@ -122,3 +122,4 @@ public struct InterpretationConfig: Sendable {
         }
     }
 }
+

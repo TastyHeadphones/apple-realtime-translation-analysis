@@ -1,30 +1,63 @@
 # apple-realtime-translation-analysis
 
-Research and demo implementation for Apple-like live translation behavior using public iOS 26 APIs.
+An iOS demo that reproduces Apple-style live translation with a fully local pipeline:
 
-## Deliverables
-- `RESEARCH.md`
-- `FINDINGS.md`
-- `DEMO_ARCHITECTURE.md`
-- `IMPLEMENTATION_PLAN.md`
-- `TODO.md`
-- `RUN.md`
-- `ios26_demo/` (Swift package demo source)
-- `ios26_host_app/` (runnable iOS host app project)
+- Whisper for streaming speech-to-text
+- a small local GGUF LLM for translation
+- route-aware speech output
+- preset downloads for fast, balanced, or higher-quality behavior
 
-## Demo Tech Stack
-- `Translation` framework (`TranslationSession`, `preferredStrategy`)
-- `Speech` framework (`SpeechAnalyzer`, `SpeechTranscriber` progressive mode)
-- `AVFAudio` (`AVAudioEngine`, `AVSpeechSynthesizer`)
-- `SwiftUI`
-- Route-aware conversation outputs (`AVAudioSessionModeDualRoute`, `AVSpeechSynthesizer.outputChannels`)
+## What the app does
 
-## Build Verification
+- Captures live microphone audio
+- Produces incremental transcription updates
+- Translates partial and final segments in near real time
+- Optionally speaks translated output through the built-in route manager
+- Lets the user choose a preset before downloading models
+
+## Local presets
+
+- `Realtime`
+  - Whisper Base Q5
+  - Qwen 0.5B Q4
+  - Smallest download, fastest feel
+- `Balanced`
+  - Whisper Small Q5
+  - Qwen 0.5B Q4
+  - Recommended default
+- `Quality`
+  - Whisper Small Q5
+  - Qwen 0.5B Q6
+  - Better translation quality, larger download
+
+## Languages
+
+Supported conversation languages:
+- English (US)
+- Japanese
+- Chinese (Mandarin)
+
+## Build
+
 ```bash
-cd ios26_demo
-xcodebuild -scheme RealtimeInterpretationDemo -destination 'generic/platform=iOS Simulator' build
-
-cd ../ios26_host_app
+./scripts/bootstrap_llama_runtime.sh
+cd ios26_host_app
 xcodegen generate
 xcodebuild -project RealtimeInterpretationHost.xcodeproj -scheme RealtimeInterpretationHost -destination 'generic/platform=iOS Simulator' build
 ```
+
+## Run
+
+```bash
+./scripts/bootstrap_llama_runtime.sh
+cd ios26_host_app
+xcodegen generate
+open RealtimeInterpretationHost.xcodeproj
+```
+
+## Notes
+
+- The first run downloads the selected preset into Application Support.
+- The llama runtime is fetched separately by `./scripts/bootstrap_llama_runtime.sh`.
+- The app does not require Apple Intelligence or Apple Translate assets.
+- Microphone permission is still required.
